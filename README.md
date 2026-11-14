@@ -59,6 +59,17 @@ daemon independently verify all three DMI identifiers before enabling control.
 
 ## Omarchy installation
 
+Install and enable the bar plugin directly from GitHub with one command:
+
+```bash
+omarchy plugin add https://github.com/Hotoke62/hpfan.git --enable
+```
+
+This installs the unprivileged bar interface and CPU-profile controls. Verified
+Full Speed and Custom Curve fan control remain a separate, explicit root setup
+because they require a matching `acpi_call.ko` for the running kernel. See
+**Verified fan-service installation** below.
+
 For a local development checkout:
 
 ```bash
