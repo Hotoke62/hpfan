@@ -4,8 +4,8 @@ A safety-first Omarchy bar plugin and Linux sensor reader developed on an HP
 EliteBook 840 G4. It reports CPU temperature, fan RPM when the firmware exposes
 it, and the current kernel-reported fan mode.
 
-Version 0.4.0 adds a verified, model-gated ACPI fan service, live RPM,
-Firmware Auto, Full Speed, and Compact/Detailed bar appearances.
+Version 0.5.0 adds a verified, editable temperature curve on top of the
+model-gated ACPI fan service, plus a minimal Compact bar by default.
 
 ## Current EliteBook 840 G4 support
 
@@ -25,21 +25,23 @@ Available:
 - Auto, Quiet, Balanced, Performance, and CPU-only Turbo profiles through
   `power-profiles-daemon`
 - Firmware Auto and Full Speed through the G4 BIOS's `STMM` method
+- Custom 40–100% fan targets through the DSDT's percentage conversion method
 - Live fan RPM through the BIOS `GFRM` method
 - Independent full-speed safety override at 85°C, released at 80°C
 
-Not currently enabled:
+Not currently available:
 
 - Separate Intel GPU temperature
 - Manual PWM duty (`pwm1` is absent)
-- Custom curves, until intermediate STMM percentages are physically verified
 
 The Linux `hp_wmi` driver exposes a possible maximum/Auto switch, but this
 machine logged an invalid-parameter response during driver initialization. A
 final guarded test on 2026-11-14 confirmed that the BIOS rejects both WMI fan
 commands with `EINVAL`. The machine's own DSDT was then inspected and its
 `STMM`, `GFRM`, `FTGC`, and `FRDC` paths were tested. Full Speed reached above
-5000 RPM and the BIOS reset method restored firmware control.
+5000 RPM and the BIOS reset method restored firmware control. The DSDT's
+percentage path was then verified at 40%, 60%, and 80%, producing BIOS targets
+of about 2194, 3277, and 4389 RPM respectively.
 
 ## Safety policy
 
@@ -71,13 +73,16 @@ The widget updates every two seconds by default:
 - Middle click cycles Auto, Quiet, Balanced, Performance, and Turbo.
 
 The panel contains clickable CPU profile buttons and a dedicated fan-control
-section. Firmware Auto and Full Speed are active when `hpfand` is running.
-Custom Curve remains visible but disabled pending physical verification.
+section. Firmware Auto, Full Speed, and Custom Curve are active when `hpfand`
+is running.
 
 Under the bar widget's Appearance settings, choose:
 
 - Compact: temperature and abbreviated RPM.
 - Detailed: temperature, full RPM, and CPU profile.
+
+Compact is the default. Left-clicking the minimal bar item expands the full
+control panel.
 
 CPU profiles and fan mode are independent. CPU Turbo does not automatically
 force Full Speed; select Full Speed separately when wanted.
@@ -108,6 +113,15 @@ sudo ./scripts/remove-verified-service.sh
 The service does not change BIOS setup, firmware, or Windows. Fan mode is a
 runtime ACPI request and is reset to firmware Auto when the service stops.
 
+The model-gated percentage verifier used on the test laptop is included for
+auditing. It temporarily stops `hpfand`, checks 40%, 60%, and 80%, monitors CPU
+temperature, restores Firmware Auto through an exit trap, and restarts the
+service:
+
+```bash
+sudo ./scripts/verify-acpi-percentages.sh
+```
+
 ## CPU profile client
 
 ```bash
@@ -137,11 +151,15 @@ not force the fan to maximum speed.
 python3 hpfanctl.py fan status
 python3 hpfanctl.py fan set full
 python3 hpfanctl.py fan set auto
+python3 hpfanctl.py fan set curve
+python3 hpfanctl.py fan curve set '45:40,60:55,72:75,82:95'
 ```
 
 The service stores the requested fan mode under `/var/lib/hpfan/state.json`.
 At 85°C it forces Full Speed regardless of the requested mode, then returns to
-that mode after temperature falls to 80°C.
+that mode after temperature falls to 80°C. Curve points use `temperature:fan%`
+syntax. Temperatures must increase from 30–84°C, percentages must stay between
+the physically verified 40–100% range, and fan percentages cannot decrease.
 
 The logical profile is saved under `~/.local/state/hpfan/profile.json`. The
 existing power-profiles daemon persists the corresponding OS power profile.
@@ -161,7 +179,7 @@ o.bind("SUPER + SHIFT + U", "Toggle CPU Turbo profile", "python3 ~/.config/omarc
 5. Hardened privileged service — complete.
 6. Firmware Auto and Full Speed — complete.
 7. 85°C maximum-fan safety override and firmware-Auto failsafe — complete.
-8. Physically verify intermediate percentages before enabling Custom Curve.
+8. Verify intermediate percentages and enable Custom Curve — complete.
 
 ## Stage 1: read-only sensor probe
 

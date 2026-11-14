@@ -65,6 +65,10 @@ class RequestHandler(socketserver.StreamRequestHandler):
                 status = controller.status()
             elif command == "set_mode":
                 status = controller.set_mode(str(request.get("mode", "")))
+            elif command == "set_curve":
+                status = controller.set_curve(
+                    request.get("points"), activate=request.get("activate") is not False
+                )
             else:
                 raise FanBackendError("unknown command")
         except FanBackendError as error:

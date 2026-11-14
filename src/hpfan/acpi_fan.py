@@ -21,7 +21,10 @@ FAN_ACTUAL_REGISTER = 0x2E
 FAN_TARGET_REGISTER = 0x2F
 FULL_SPEED_RAW = 45
 RPM_NUMERATOR = 0x3C000
-VALID_MODES = ("auto", "full")
+MIN_CURVE_PERCENT = 40
+MAX_CURVE_PERCENT = 100
+DEFAULT_CURVE = ((45.0, 40), (60.0, 55), (72.0, 75), (82.0, 95))
+VALID_MODES = ("auto", "full", "curve")
 DEFAULT_SOCKET_PATH = Path("/run/hpfan/control.sock")
 SUPPORTED_DMI = {
     "sys_vendor": "HP",
@@ -67,7 +70,9 @@ class FanStatus:
     rpm: int | None
     actual_raw: int | None
     target_raw: int | None
+    target_percent: int | None
     cpu_max_c: float | None
+    curve: list[dict[str, float | int]]
     error: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -87,6 +92,13 @@ class AcpiCallBackend:
 
     def set_full(self) -> str:
         return self._call(f"{STMM_METHOD} {FULL_SPEED_BUFFER}")
+
+    def set_percent(self, percent: int) -> str:
+        if not MIN_CURVE_PERCENT <= percent <= MAX_CURVE_PERCENT:
+            raise FanBackendError(
+                f"fan percentage must be {MIN_CURVE_PERCENT}-{MAX_CURVE_PERCENT}"
+            )
+        return self._call(f"{STMM_METHOD} b2301{percent:02X}")
 
     def set_auto(self) -> str:
         result = self._call(f"{STMM_METHOD} {FIRMWARE_AUTO_BUFFER}")
@@ -150,6 +162,48 @@ def raw_to_rpm(raw: int | None) -> int | None:
     return (RPM_NUMERATOR + raw // 2) // raw
 
 
+def normalize_curve(points: object) -> tuple[tuple[float, int], ...]:
+    """Validate a bounded, monotonic temperature-to-percentage curve."""
+
+    if not isinstance(points, (list, tuple)) or not 2 <= len(points) <= 8:
+        raise FanBackendError("custom curve must contain 2-8 points")
+    normalized: list[tuple[float, int]] = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise FanBackendError("each curve point must be [temperature, percent]")
+        temperature, percent = point
+        if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
+            raise FanBackendError("curve temperatures must be numbers")
+        if isinstance(percent, bool) or not isinstance(percent, (int, float)):
+            raise FanBackendError("curve percentages must be numbers")
+        temperature = float(temperature)
+        if not 30.0 <= temperature <= 84.0:
+            raise FanBackendError("curve temperatures must be between 30°C and 84°C")
+        if float(percent) != int(percent):
+            raise FanBackendError("curve percentages must be whole numbers")
+        percent = int(percent)
+        if not MIN_CURVE_PERCENT <= percent <= MAX_CURVE_PERCENT:
+            raise FanBackendError(
+                f"curve percentages must be {MIN_CURVE_PERCENT}-{MAX_CURVE_PERCENT}%"
+            )
+        if normalized and temperature <= normalized[-1][0]:
+            raise FanBackendError("curve temperatures must increase")
+        if normalized and percent < normalized[-1][1]:
+            raise FanBackendError("curve percentages must not decrease")
+        normalized.append((temperature, percent))
+    return tuple(normalized)
+
+
+def curve_percent(points: tuple[tuple[float, int], ...], temperature: float) -> int:
+    if temperature <= points[0][0]:
+        return points[0][1]
+    for (low_temp, low_percent), (high_temp, high_percent) in zip(points, points[1:]):
+        if temperature <= high_temp:
+            position = (temperature - low_temp) / (high_temp - low_temp)
+            return round(low_percent + position * (high_percent - low_percent))
+    return points[-1][1]
+
+
 class FanController:
     """Serialize control requests and enforce the independent thermal floor."""
 
@@ -170,6 +224,9 @@ class FanController:
         self.safety_release_c = safety_release_c
         self.requested_mode = "auto"
         self.effective_mode = "auto"
+        self.curve = normalize_curve(DEFAULT_CURVE)
+        self.applied_percent: int | None = None
+        self.curve_last_change = 0.0
         self.safety_forced = False
         self.last_error: str | None = None
         self.lock = threading.RLock()
@@ -177,23 +234,57 @@ class FanController:
     def start(self) -> None:
         with self.lock:
             self.backend.set_auto()
-            self.requested_mode = self._read_state()
-            self._apply(self.requested_mode)
+            self.requested_mode, self.curve = self._read_state()
+            self._apply(self.requested_mode, self.temperature_reader())
 
     def stop(self) -> None:
         with self.lock:
             self.backend.set_auto()
             self.effective_mode = "auto"
+            self.applied_percent = None
             self.safety_forced = False
 
     def set_mode(self, mode: str) -> FanStatus:
         if mode not in VALID_MODES:
             raise FanBackendError(f"unsupported fan mode: {mode}")
         with self.lock:
+            previous_mode = self.requested_mode
             self.requested_mode = mode
-            self._write_state(mode)
-            if not self.safety_forced:
-                self._apply(mode)
+            try:
+                if not self.safety_forced:
+                    self._apply(mode, self.temperature_reader())
+                self._write_state()
+            except FanBackendError as error:
+                self.requested_mode = previous_mode
+                if not self.safety_forced:
+                    try:
+                        self._apply(previous_mode, self.temperature_reader())
+                    except FanBackendError:
+                        pass
+                raise error
+            return self.status()
+
+    def set_curve(self, points: object, activate: bool = True) -> FanStatus:
+        normalized = normalize_curve(points)
+        with self.lock:
+            previous_curve = self.curve
+            previous_mode = self.requested_mode
+            self.curve = normalized
+            if activate:
+                self.requested_mode = "curve"
+            try:
+                if not self.safety_forced and self.requested_mode == "curve":
+                    self._apply("curve", self.temperature_reader())
+                self._write_state()
+            except FanBackendError as error:
+                self.curve = previous_curve
+                self.requested_mode = previous_mode
+                if not self.safety_forced:
+                    try:
+                        self._apply(previous_mode, self.temperature_reader())
+                    except FanBackendError:
+                        pass
+                raise error
             return self.status()
 
     def tick(self) -> FanStatus:
@@ -203,10 +294,14 @@ class FanController:
                 if not self.safety_forced or self.effective_mode != "full":
                     self.backend.set_full()
                     self.effective_mode = "full"
+                    self.applied_percent = 100
+                    self.curve_last_change = time.monotonic()
                 self.safety_forced = True
             elif self.safety_forced and temperature is not None and temperature <= self.safety_release_c:
                 self.safety_forced = False
-                self._apply(self.requested_mode)
+                self._apply(self.requested_mode, temperature)
+            elif not self.safety_forced and self.requested_mode == "curve":
+                self._apply_curve_if_needed(temperature)
             return self._status_with_temperature(temperature)
 
     def status(self) -> FanStatus:
@@ -220,8 +315,8 @@ class FanController:
         except FanBackendError as backend_error:
             actual, target, rpm = None, None, None
             error = str(backend_error)[:512]
-        observed_mode = self.effective_mode
-        if target is not None:
+        observed_mode = "full" if self.safety_forced else self.effective_mode
+        if target is not None and observed_mode != "curve":
             observed_mode = "full" if target <= FULL_SPEED_RAW else "auto"
         return FanStatus(
             available=True,
@@ -234,38 +329,96 @@ class FanController:
             rpm=rpm,
             actual_raw=actual,
             target_raw=target,
+            target_percent=self.applied_percent,
             cpu_max_c=temperature,
+            curve=[{"temperature_c": point[0], "percent": point[1]} for point in self.curve],
             error=error,
         )
 
-    def _apply(self, mode: str) -> None:
+    def _apply(self, mode: str, temperature: float | None) -> None:
         try:
             if mode == "full":
                 self.backend.set_full()
+                self.applied_percent = 100
+            elif mode == "curve":
+                if temperature is None:
+                    self.backend.set_auto()
+                    self.effective_mode = "auto"
+                    self.applied_percent = None
+                    self.last_error = "custom curve is waiting for a valid CPU temperature"
+                    return
+                self.applied_percent = curve_percent(self.curve, temperature)
+                self.backend.set_percent(self.applied_percent)
             else:
                 self.backend.set_auto()
+                self.applied_percent = None
             self.effective_mode = mode
+            self.curve_last_change = time.monotonic()
             self.last_error = None
         except FanBackendError as error:
             self.last_error = str(error)[:512]
             raise
 
-    def _read_state(self) -> str:
+    def _apply_curve_if_needed(self, temperature: float | None) -> None:
+        try:
+            if temperature is None:
+                if self.effective_mode != "auto":
+                    self.backend.set_auto()
+                    self.effective_mode = "auto"
+                    self.applied_percent = None
+                self.last_error = "custom curve is waiting for a valid CPU temperature"
+                return
+            desired = curve_percent(self.curve, temperature)
+            now = time.monotonic()
+            if self.effective_mode != "curve" or self.applied_percent is None:
+                self.backend.set_percent(desired)
+                self.applied_percent = desired
+                self.curve_last_change = now
+            elif desired >= self.applied_percent + 3:
+                self.backend.set_percent(desired)
+                self.applied_percent = desired
+                self.curve_last_change = now
+            elif (
+                desired <= self.applied_percent - 3
+                and now - self.curve_last_change >= 10.0
+            ):
+                self.backend.set_percent(desired)
+                self.applied_percent = desired
+                self.curve_last_change = now
+            self.effective_mode = "curve"
+            self.last_error = None
+        except FanBackendError as error:
+            self.last_error = str(error)[:512]
+            raise
+
+    def _read_state(self) -> tuple[str, tuple[tuple[float, int], ...]]:
         try:
             if self.state_path.stat().st_size > 4096:
-                return "auto"
+                return "auto", normalize_curve(DEFAULT_CURVE)
             value = json.loads(self.state_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
-            return "auto"
+            return "auto", normalize_curve(DEFAULT_CURVE)
         mode = value.get("mode") if isinstance(value, dict) else None
-        return mode if mode in VALID_MODES else "auto"
+        curve_value = value.get("curve") if isinstance(value, dict) else None
+        try:
+            curve = normalize_curve(curve_value) if curve_value is not None else normalize_curve(DEFAULT_CURVE)
+        except FanBackendError:
+            curve = normalize_curve(DEFAULT_CURVE)
+        return (mode if mode in VALID_MODES else "auto"), curve
 
-    def _write_state(self, mode: str) -> None:
-        self.state_path.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+    def _write_state(self) -> None:
         temporary = self.state_path.with_name(f".{self.state_path.name}.{os.getpid()}")
-        temporary.write_text(json.dumps({"mode": mode}) + "\n", encoding="utf-8")
-        os.chmod(temporary, 0o600)
-        os.replace(temporary, self.state_path)
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+            value = {"mode": self.requested_mode, "curve": self.curve}
+            temporary.write_text(
+                json.dumps(value, separators=(",", ":")) + "\n", encoding="utf-8"
+            )
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, self.state_path)
+        except OSError as error:
+            temporary.unlink(missing_ok=True)
+            raise FanBackendError(f"cannot save fan state: {error}") from error
 
 
 class FanServiceClient:
@@ -279,6 +432,12 @@ class FanServiceClient:
         if mode not in VALID_MODES:
             raise FanBackendError(f"unsupported fan mode: {mode}")
         return self.request({"command": "set_mode", "mode": mode})
+
+    def set_curve(self, points: object, activate: bool = True) -> dict[str, object]:
+        normalized = normalize_curve(points)
+        return self.request(
+            {"command": "set_curve", "points": normalized, "activate": activate}
+        )
 
     def request(self, payload: dict[str, object]) -> dict[str, object]:
         encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8") + b"\n"

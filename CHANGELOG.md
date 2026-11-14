@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 - 2026-11-14
+
+- Verify BIOS-controlled 40%, 60%, and 80% targets through the EliteBook DSDT `STMM` percentage path.
+- Add a persistent, editable custom temperature-to-fan-percentage curve.
+- Enforce a verified 40% minimum and retain the independent 85°C Full Speed override.
+- Make Compact the default bar appearance while keeping click-to-expand controls.
+
 ## 0.4.0 - 2026-11-14
 
 - Verify the EliteBook 840 G4 fan map from its own DSDT.

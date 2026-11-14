@@ -20,7 +20,10 @@ Panel {
   property bool fanBackendAvailable: false
   property string fanRequestedMode: "auto"
   property string fanEffectiveMode: "auto"
+  property int fanTargetPercent: -1
   property bool fanSafetyForced: false
+  property string curveDraft: "45:40,60:55,72:75,82:95"
+  property bool curveEditing: false
   property bool readingAvailable: false
   property bool refreshPending: false
 
@@ -41,9 +44,9 @@ Panel {
     500,
     Math.min(10000, Number(setting("refreshIntervalMs", 2000)) || 2000)
   )
-  readonly property string displayMode: String(setting("displayMode", "Detailed")) === "Compact"
-    ? "Compact"
-    : "Detailed"
+  readonly property string displayMode: String(setting("displayMode", "Compact")) === "Detailed"
+    ? "Detailed"
+    : "Compact"
   readonly property string temperatureText: readingAvailable
     ? Commons.I18n.formatNumber(cpuTemp, 0) + "°C"
     : strings.t("bar.unavailable")
@@ -61,6 +64,8 @@ Panel {
       ? strings.t("fan.fullSafety")
       : fanEffectiveMode === "full"
         ? strings.t("fan.fullSpeed")
+        : fanEffectiveMode === "curve"
+          ? strings.t("fan.customCurve").arg(Commons.I18n.formatNumber(fanTargetPercent))
         : strings.t("fan.firmwareAuto")
     : controlMode === "automatic"
       ? strings.t("fan.firmwareAuto")
@@ -97,6 +102,20 @@ Panel {
     var parsed = Number(value)
     if (!isFinite(parsed) || parsed < minimum || parsed > maximum) return fallback
     return parsed
+  }
+
+  function curveText(points) {
+    if (!Array.isArray(points) || points.length < 2 || points.length > 8) return ""
+    var output = []
+    for (var index = 0; index < points.length; index++) {
+      var point = points[index]
+      if (!point || typeof point !== "object") return ""
+      var temperature = boundedNumber(point.temperature_c, 30, 84, -1)
+      var percent = boundedNumber(point.percent, 40, 100, -1)
+      if (temperature < 0 || percent < 0) return ""
+      output.push(String(temperature) + ":" + String(Math.round(percent)))
+    }
+    return output.join(",")
   }
 
   function consume(rawText) {
@@ -144,17 +163,23 @@ Panel {
       fanBackendAvailable = false
       fanRequestedMode = "auto"
       fanEffectiveMode = "auto"
+      fanTargetPercent = -1
       fanSafetyForced = false
       if (data.fan_service && typeof data.fan_service === "object"
           && data.fan_service.available === true) {
         fanBackendAvailable = true
-        if (data.fan_service.requested_mode === "auto" || data.fan_service.requested_mode === "full")
+        if (data.fan_service.requested_mode === "auto" || data.fan_service.requested_mode === "full"
+            || data.fan_service.requested_mode === "curve")
           fanRequestedMode = String(data.fan_service.requested_mode)
-        if (data.fan_service.effective_mode === "auto" || data.fan_service.effective_mode === "full")
+        if (data.fan_service.effective_mode === "auto" || data.fan_service.effective_mode === "full"
+            || data.fan_service.effective_mode === "curve")
           fanEffectiveMode = String(data.fan_service.effective_mode)
+        fanTargetPercent = Math.round(boundedNumber(data.fan_service.target_percent, 40, 100, -1))
         fanSafetyForced = data.fan_service.safety_forced === true
         var serviceRpm = boundedNumber(data.fan_service.rpm, 0, 100000, -1)
         if (serviceRpm >= 0) fanRpm = Math.round(serviceRpm)
+        var nextCurve = curveText(data.fan_service.curve)
+        if (!curveEditing && nextCurve.length > 0) curveDraft = nextCurve
       }
     } catch (error) {
       // Preserve the last valid reading. Raw helper output is never displayed.
@@ -185,8 +210,16 @@ Panel {
 
   function runFanAction(mode) {
     if (fanProc.running || !fanBackendAvailable) return
-    if (mode !== "auto" && mode !== "full") return
+    if (mode !== "auto" && mode !== "full" && mode !== "curve") return
     fanProc.command = ["python3", root.controlPath, "--json", "--notify", "fan", "set", mode]
+    fanProc.running = true
+  }
+
+  function runCurveAction(spec) {
+    if (fanProc.running || !fanBackendAvailable) return
+    var value = String(spec || "").trim()
+    if (value.length < 7 || value.length > 256) return
+    fanProc.command = ["python3", root.controlPath, "--json", "--notify", "fan", "curve", "set", value]
     fanProc.running = true
   }
 
@@ -289,7 +322,7 @@ Panel {
     bar: root.bar
     text: root.statusText
     labelVisible: true
-    horizontalMargin: 8.75
+    horizontalMargin: 6.5
     verticalPadding: 8.75
     tooltipText: root.barTooltip
     onPressed: function(b) {
@@ -575,8 +608,53 @@ Panel {
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
               bordered: true
-              enabled: false
-              opacity: 0.5
+              enabled: root.fanBackendAvailable
+              active: root.fanRequestedMode === "curve"
+              opacity: enabled ? 1.0 : 0.5
+              onClicked: root.runFanAction("curve")
+            }
+          }
+
+          Column {
+            width: parent.width
+            visible: root.fanBackendAvailable
+            spacing: Style.space(6)
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: strings.t("panel.curveHelp")
+              wrapMode: Text.WordWrap
+              color: Qt.darker(root.bar.foreground, 1.35)
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              TextField {
+                id: curveField
+                width: parent.width - applyCurveButton.width - parent.spacing
+                text: root.curveDraft
+                placeholderText: "45:40,60:55,72:75,82:95"
+                foreground: root.bar.foreground
+                accent: Commons.Color.accent
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                onTextEdited: root.curveDraft = text
+                onActiveFocusChanged: root.curveEditing = activeFocus
+              }
+
+              Button {
+                id: applyCurveButton
+                text: strings.t("panel.applyCurve")
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+                bordered: true
+                onClicked: root.runCurveAction(root.curveDraft)
+              }
             }
           }
 

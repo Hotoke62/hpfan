@@ -5,7 +5,7 @@
 HP Fan Monitor is an Omarchy bar widget for the HP EliteBook 840 G4. It reads
 Linux hwmon temperatures, selects standard CPU power profiles through
 `powerprofilesctl`, and can talk to an optional model-gated root service for
-verified Firmware Auto and Full Speed requests.
+verified Firmware Auto, Full Speed, and bounded percentage requests.
 
 ## Runtime behavior
 
@@ -27,6 +27,8 @@ verified Firmware Auto and Full Speed requests.
   Auto/Full requests.
 - The root service enforces full speed at 85°C, restores the requested mode at
   80°C, and calls the BIOS reset method on shutdown.
+- Custom Curve accepts 2–8 monotonic points, restricts temperatures to
+  30–84°C, and restricts fan targets to the verified 40–100% range.
 - The bar supports Compact and Detailed appearances through Omarchy's widget
   settings schema.
 
@@ -54,13 +56,18 @@ optional service is running.
 The repository contains a separate interactive HP WMI maximum/Auto test. That
 test requires sudo and is never launched by the plugin.
 
+It also contains a board-gated percentage verifier used to confirm 40%, 60%,
+and 80%. It restores Firmware Auto in an exit trap and is never launched by
+the plugin.
+
 The kernel `hp-wmi` maximum-fan interface was rejected by this BIOS with
 `EINVAL`, so the plugin does not use it. Full Speed instead uses the exact
 `STMM` method recovered from this machine's DSDT and physically verified at
 approximately 5461 RPM. Firmware Auto uses the verified BIOS reset buffer.
 
-Custom Curve remains disabled until intermediate STMM percentages are
-physically tested and shown to restore safely.
+The DSDT percentage path was physically checked at 40%, 60%, and 80% with BIOS
+targets of approximately 2194, 3277, and 4389 RPM. The curve never requests
+less than 40%, and the independent 85°C Full Speed override always wins.
 
 ## Safety review
 
