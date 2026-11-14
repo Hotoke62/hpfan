@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "vee.hpfan",
   "name": "HP Fan Monitor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Vatsal Visani",
   "license": "MIT",
   "description": "Safe temperature monitoring and CPU power profiles for HP laptops",
@@ -10,11 +10,11 @@
     "bar-widget"
   ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "HpfanPanel.qml"
   },
   "barWidget": {
     "displayName": "HP Fan Monitor",
-    "description": "Shows temperatures and fan capability, cycles CPU profiles, and keeps fan control with firmware.",
+    "description": "Interactive temperature and CPU-profile panel with honest fan-control capability reporting.",
     "category": "System",
     "aliases": [
       "fan",

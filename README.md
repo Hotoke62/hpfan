@@ -4,7 +4,7 @@ A safety-first Omarchy bar plugin and Linux sensor reader developed on an HP
 EliteBook 840 G4. It reports CPU temperature, fan RPM when the firmware exposes
 it, and the current kernel-reported fan mode.
 
-Version 0.2.0 adds unprivileged CPU power profiles. It does not write embedded
+Version 0.3.0 adds an interactive Omarchy popup and unprivileged CPU power profiles. It does not write embedded
 controller registers and does not claim that unsupported fan controls work.
 
 ## Current EliteBook 840 G4 support
@@ -63,9 +63,13 @@ omarchy plugin enable vee.hpfan --before omarchy.power
 
 The widget updates every two seconds by default:
 
-- Left click cycles Auto, Quiet, Balanced, Performance, and Turbo.
+- Left click opens the control panel.
 - Right click toggles CPU Turbo and restores the previous profile.
-- Middle click refreshes the sensor reading.
+- Middle click cycles Auto, Quiet, Balanced, Performance, and Turbo.
+
+The panel contains clickable CPU profile buttons and a dedicated fan-control
+section. Full Speed and Custom Curve are shown but disabled because the BIOS
+rejects the safe WMI control path.
 
 These are CPU power profiles. The fan always remains under firmware automatic
 control on the tested EliteBook.

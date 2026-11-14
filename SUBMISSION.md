@@ -18,6 +18,8 @@ fan capability data. It also selects standard CPU power profiles through
 - On an explicit click or keybinding, may request `power-saver`, `balanced`, or
   `performance` from the existing `power-profiles-daemon` service.
 - Saves the selected logical profile in the user's XDG state directory.
+- Shows full-speed and custom-curve controls as disabled when no verified fan
+  backend exists; clicking them performs no command.
 
 ## Permissions and dependencies
 

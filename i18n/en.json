@@ -1,7 +1,7 @@
 {
   "bar.unavailable": "Unavailable",
   "bar.rpmUnavailable": "RPM unavailable",
-  "bar.tooltip": "CPU: %1\nFan: %2\nCPU profile: %3\nFan mode: %4\n%5\nLeft click: cycle CPU profile\nRight click: toggle CPU Turbo",
+  "bar.tooltip": "CPU: %1\nFan: %2\nCPU profile: %3\nFan mode: %4\nLeft click: open controls\nMiddle click: cycle CPU profile\nRight click: toggle CPU Turbo",
   "profile.auto": "Auto",
   "profile.quiet": "Quiet",
   "profile.balanced": "Balanced",
@@ -13,5 +13,21 @@
   "control.manualAvailable": "Manual fan duty is exposed by the kernel.",
   "control.awaitingVerification": "Maximum/Auto control awaits a physical safety test.",
   "control.failedVerification": "The kernel/BIOS rejected maximum-fan control; firmware Auto remains active.",
-  "control.monitorOnly": "Monitoring only; no safe writable fan backend is available."
+  "control.monitorOnly": "Monitoring only; no safe writable fan backend is available.",
+  "boost.allowed": "Allowed",
+  "boost.disabled": "Disabled",
+  "fan.firmwareAuto": "Firmware Auto",
+  "panel.title": "HP Thermal Control",
+  "panel.subtitle": "SAFE CPU PROFILES · FIRMWARE FAN",
+  "panel.cpuProfile": "CPU profile",
+  "panel.turboBoost": "Turbo Boost",
+  "panel.fanSpeed": "Fan speed",
+  "panel.fanMode": "Fan mode",
+  "panel.cpuProfiles": "CPU profiles",
+  "panel.cpuProfilesHelp": "These buttons change CPU power policy only. Intel still controls clock boost and thermal limits.",
+  "panel.fanControl": "Fan control",
+  "panel.firmwareAutoActive": "Firmware Auto — active",
+  "panel.fullSpeed": "Full Speed — unavailable",
+  "panel.customCurve": "Custom Curve — unavailable",
+  "panel.fanUnavailableReason": "This EliteBook BIOS rejects the safe hp_wmi fan commands with EINVAL. Full speed and custom curves stay disabled to avoid undocumented EC writes."
 }

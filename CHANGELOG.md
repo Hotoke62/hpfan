@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-11-14
+
+- Add a native clickable Omarchy popup panel.
+- Add profile buttons for Auto, Quiet, Balanced, Performance, and CPU Turbo.
+- Add a separate fan-control section showing Firmware Auto as active.
+- Show Full Speed and Custom Curve as disabled with the confirmed BIOS reason.
+- Change left click to open the panel; middle click cycles profiles and right
+  click toggles CPU Turbo.
+
 ## 0.2.0 - 2026-11-14
 
 - Add unprivileged Auto, Quiet, Balanced, Performance, and CPU Turbo profiles.
