@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - 2026-11-14
+
+- Make the popup vertically scrollable on shorter displays.
+- Add a top-level Edit Custom Curve button that reveals and focuses the editor.
+
 ## 0.5.0 - 2026-11-14
 
 - Verify BIOS-controlled 40%, 60%, and 80% targets through the EliteBook DSDT `STMM` percentage path.

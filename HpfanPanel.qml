@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -223,6 +224,14 @@ Panel {
     fanProc.running = true
   }
 
+  function revealCurveEditor(flick, field) {
+    runFanAction("curve")
+    Qt.callLater(function() {
+      if (flick) flick.contentY = Math.max(0, flick.contentHeight - flick.height)
+      if (field) field.forceActiveFocus()
+    })
+  }
+
   onOpenedChanged: if (opened) refresh()
 
   implicitWidth: button.implicitWidth
@@ -340,7 +349,7 @@ Panel {
     open: root.opened
     focusTarget: panel.loadedContent
     contentWidth: panel.fittedContentWidth(Style.space(440))
-    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight)
+    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(560))
 
     content: PanelKeyCatcher {
       anchors.fill: parent
@@ -348,12 +357,21 @@ Panel {
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
-      Column {
-        id: contentColumn
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        spacing: Style.space(14)
+      Flickable {
+        id: panelFlick
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: contentColumn.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+        interactive: contentHeight > height
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+        Column {
+          id: contentColumn
+          width: panelFlick.width
+          spacing: Style.space(14)
 
         Item {
           width: parent.width
@@ -511,6 +529,18 @@ Panel {
           }
         }
 
+        Button {
+          width: parent.width
+          visible: root.fanBackendAvailable
+          iconText: "C"
+          text: strings.t("panel.editCurve")
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          bordered: true
+          active: root.fanRequestedMode === "curve"
+          onClicked: root.revealCurveEditor(panelFlick, curveField)
+        }
+
         PanelSeparator { foreground: root.bar.foreground }
 
         Column {
@@ -611,7 +641,7 @@ Panel {
               enabled: root.fanBackendAvailable
               active: root.fanRequestedMode === "curve"
               opacity: enabled ? 1.0 : 0.5
-              onClicked: root.runFanAction("curve")
+              onClicked: root.revealCurveEditor(panelFlick, curveField)
             }
           }
 
@@ -669,6 +699,7 @@ Panel {
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.bodySmall
           }
+        }
         }
       }
     }
