@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "vee.hpfan",
   "name": "HP Fan Monitor",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "author": "Vatsal Visani",
   "license": "MIT",
   "description": "Temperature, CPU profiles, and verified fan control for the HP EliteBook 840 G4",

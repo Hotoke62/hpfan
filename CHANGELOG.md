@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 - 2026-11-14
+
+- Replace the text-only curve editor with four visible 40–100% sliders.
+- Keep fan targets non-decreasing and snap adjustments to safe 5% steps.
+- Add an Apply Curve button near the top of the scrollable control panel.
+
 ## 0.5.1 - 2026-11-14
 
 - Make the popup vertically scrollable on shorter displays.

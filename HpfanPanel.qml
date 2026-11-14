@@ -23,8 +23,10 @@ Panel {
   property string fanEffectiveMode: "auto"
   property int fanTargetPercent: -1
   property bool fanSafetyForced: false
-  property string curveDraft: "45:40,60:55,72:75,82:95"
+  readonly property var curveTemperatures: [45, 60, 72, 82]
+  property var curvePercents: [40, 55, 75, 95]
   property bool curveEditing: false
+  property bool curveDirty: false
   property bool readingAvailable: false
   property bool refreshPending: false
 
@@ -105,18 +107,35 @@ Panel {
     return parsed
   }
 
-  function curveText(points) {
-    if (!Array.isArray(points) || points.length < 2 || points.length > 8) return ""
-    var output = []
+  function syncCurve(points) {
+    if (!Array.isArray(points) || points.length !== curveTemperatures.length) return
+    var next = []
     for (var index = 0; index < points.length; index++) {
       var point = points[index]
-      if (!point || typeof point !== "object") return ""
-      var temperature = boundedNumber(point.temperature_c, 30, 84, -1)
-      var percent = boundedNumber(point.percent, 40, 100, -1)
-      if (temperature < 0 || percent < 0) return ""
-      output.push(String(temperature) + ":" + String(Math.round(percent)))
+      if (!point || typeof point !== "object") return
+      var percent = Math.round(boundedNumber(point.percent, 40, 100, -1))
+      if (percent < 0) return
+      next.push(percent)
     }
-    return output.join(",")
+    curvePercents = next
+  }
+
+  function setCurvePercent(index, value) {
+    if (index < 0 || index >= curvePercents.length) return
+    var next = curvePercents.slice()
+    var percent = Math.max(40, Math.min(100, Math.round(Number(value) / 5) * 5))
+    if (index > 0) percent = Math.max(percent, next[index - 1])
+    if (index + 1 < next.length) percent = Math.min(percent, next[index + 1])
+    next[index] = percent
+    curvePercents = next
+    curveDirty = true
+  }
+
+  function curveSpec() {
+    var points = []
+    for (var index = 0; index < curveTemperatures.length; index++)
+      points.push(String(curveTemperatures[index]) + ":" + String(curvePercents[index]))
+    return points.join(",")
   }
 
   function consume(rawText) {
@@ -179,8 +198,7 @@ Panel {
         fanSafetyForced = data.fan_service.safety_forced === true
         var serviceRpm = boundedNumber(data.fan_service.rpm, 0, 100000, -1)
         if (serviceRpm >= 0) fanRpm = Math.round(serviceRpm)
-        var nextCurve = curveText(data.fan_service.curve)
-        if (!curveEditing && nextCurve.length > 0) curveDraft = nextCurve
+        if (!curveEditing && !curveDirty) syncCurve(data.fan_service.curve)
       }
     } catch (error) {
       // Preserve the last valid reading. Raw helper output is never displayed.
@@ -216,20 +234,12 @@ Panel {
     fanProc.running = true
   }
 
-  function runCurveAction(spec) {
+  function runCurveAction() {
     if (fanProc.running || !fanBackendAvailable) return
-    var value = String(spec || "").trim()
-    if (value.length < 7 || value.length > 256) return
+    var value = curveSpec()
+    curveDirty = false
     fanProc.command = ["python3", root.controlPath, "--json", "--notify", "fan", "curve", "set", value]
     fanProc.running = true
-  }
-
-  function revealCurveEditor(flick, field) {
-    runFanAction("curve")
-    Qt.callLater(function() {
-      if (flick) flick.contentY = Math.max(0, flick.contentHeight - flick.height)
-      if (field) field.forceActiveFocus()
-    })
   }
 
   onOpenedChanged: if (opened) refresh()
@@ -323,6 +333,92 @@ Panel {
     repeat: true
     triggeredOnStart: true
     onTriggered: root.refresh()
+  }
+
+  Component {
+    id: curveEditorComponent
+
+    Column {
+      spacing: Style.space(6)
+
+      PanelSectionHeader {
+        text: strings.t("panel.curveSliders")
+        foreground: root.bar.foreground
+        fontFamily: root.bar.fontFamily
+      }
+
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        text: strings.t("panel.curveHelp")
+        wrapMode: Text.WordWrap
+        color: Qt.darker(root.bar.foreground, 1.35)
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      Repeater {
+        model: root.curveTemperatures.length
+
+        Row {
+          required property int index
+          width: parent.width
+          spacing: Style.space(8)
+
+          Text {
+            id: temperatureLabel
+            width: Style.space(48)
+            textFormat: Text.PlainText
+            text: Commons.I18n.formatNumber(root.curveTemperatures[index]) + "°C"
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            anchors.verticalCenter: parent.verticalCenter
+          }
+
+          PanelSlider {
+            width: parent.width - temperatureLabel.width - percentLabel.width - parent.spacing * 2
+            bar: root.bar
+            minimum: 40
+            maximum: 100
+            step: 5
+            integer: true
+            tickCount: 7
+            value: root.curvePercents[index]
+            onMoved: function(value) {
+              root.curveEditing = true
+              root.setCurvePercent(index, value)
+            }
+            onReleased: function(value) {
+              root.setCurvePercent(index, value)
+              root.curveEditing = false
+            }
+          }
+
+          Text {
+            id: percentLabel
+            width: Style.space(42)
+            textFormat: Text.PlainText
+            text: Commons.I18n.formatNumber(root.curvePercents[index]) + "%"
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            horizontalAlignment: Text.AlignRight
+            anchors.verticalCenter: parent.verticalCenter
+          }
+        }
+      }
+
+      Button {
+        width: parent.width
+        text: strings.t("panel.applyCurve")
+        foreground: root.bar.foreground
+        fontFamily: root.bar.fontFamily
+        bordered: true
+        active: root.curveDirty
+        onClicked: root.runCurveAction()
+      }
+    }
   }
 
   WidgetButton {
@@ -529,16 +625,11 @@ Panel {
           }
         }
 
-        Button {
+        Loader {
           width: parent.width
           visible: root.fanBackendAvailable
-          iconText: "C"
-          text: strings.t("panel.editCurve")
-          foreground: root.bar.foreground
-          fontFamily: root.bar.fontFamily
-          bordered: true
-          active: root.fanRequestedMode === "curve"
-          onClicked: root.revealCurveEditor(panelFlick, curveField)
+          active: visible
+          sourceComponent: curveEditorComponent
         }
 
         PanelSeparator { foreground: root.bar.foreground }
@@ -639,52 +730,8 @@ Panel {
               fontFamily: root.bar.fontFamily
               bordered: true
               enabled: root.fanBackendAvailable
-              active: root.fanRequestedMode === "curve"
               opacity: enabled ? 1.0 : 0.5
-              onClicked: root.revealCurveEditor(panelFlick, curveField)
-            }
-          }
-
-          Column {
-            width: parent.width
-            visible: root.fanBackendAvailable
-            spacing: Style.space(6)
-
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              text: strings.t("panel.curveHelp")
-              wrapMode: Text.WordWrap
-              color: Qt.darker(root.bar.foreground, 1.35)
-              font.family: root.bar.fontFamily
-              font.pixelSize: Style.font.bodySmall
-            }
-
-            Row {
-              width: parent.width
-              spacing: Style.space(6)
-
-              TextField {
-                id: curveField
-                width: parent.width - applyCurveButton.width - parent.spacing
-                text: root.curveDraft
-                placeholderText: "45:40,60:55,72:75,82:95"
-                foreground: root.bar.foreground
-                accent: Commons.Color.accent
-                font.family: root.bar.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                onTextEdited: root.curveDraft = text
-                onActiveFocusChanged: root.curveEditing = activeFocus
-              }
-
-              Button {
-                id: applyCurveButton
-                text: strings.t("panel.applyCurve")
-                foreground: root.bar.foreground
-                fontFamily: root.bar.fontFamily
-                bordered: true
-                onClicked: root.runCurveAction(root.curveDraft)
-              }
+              onClicked: root.runFanAction("curve")
             }
           }
 

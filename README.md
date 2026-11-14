@@ -4,8 +4,9 @@ A safety-first Omarchy bar plugin and Linux sensor reader developed on an HP
 EliteBook 840 G4. It reports CPU temperature, fan RPM when the firmware exposes
 it, and the current kernel-reported fan mode.
 
-Version 0.5.0 adds a verified, editable temperature curve on top of the
-model-gated ACPI fan service, plus a minimal Compact bar by default.
+Version 0.5.2 adds a visible slider editor for the verified temperature curve
+on top of the model-gated ACPI fan service, plus a minimal Compact bar by
+default.
 
 ## Current EliteBook 840 G4 support
 
@@ -74,7 +75,10 @@ The widget updates every two seconds by default:
 
 The panel contains clickable CPU profile buttons and a dedicated fan-control
 section. Firmware Auto, Full Speed, and Custom Curve are active when `hpfand`
-is running.
+is running. The custom curve uses four visible sliders at 45°C, 60°C, 72°C,
+and 82°C; adjust them and press **Apply Curve**. Targets are limited to the
+verified 40–100% range, snap to 5% steps, and cannot decrease as temperature
+rises.
 
 Under the bar widget's Appearance settings, choose:
 

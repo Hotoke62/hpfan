@@ -31,10 +31,10 @@
   "panel.fanControl": "Fan control",
   "panel.firmwareAutoActive": "Firmware Auto",
   "panel.fullSpeed": "Full Speed",
-  "panel.customCurve": "Custom Curve / Edit",
-  "panel.editCurve": "Edit Custom Curve",
-  "panel.curveHelp": "Curve format: temperature:fan %, separated by commas. Allowed: 30–84°C and 40–100%. Example: 45:40,60:55,72:75,82:95",
-  "panel.applyCurve": "Apply",
+  "panel.customCurve": "Use Custom Curve",
+  "panel.curveSliders": "Custom Curve Sliders",
+  "panel.curveHelp": "Drag each fan-speed slider, then press Apply. Sliders cannot cross each other. The 85°C safety point is locked to 100%.",
+  "panel.applyCurve": "Apply Curve",
   "panel.fanBackendUnavailable": "The verified ACPI fan service is not running. Firmware Auto remains in control.",
   "panel.fanVerifiedReason": "Firmware Auto, Full Speed, and 40–100% custom targets use this G4 BIOS's verified STMM method. The 85°C safety override always wins."
 }
