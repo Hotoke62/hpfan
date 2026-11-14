@@ -3,7 +3,8 @@
 ## Summary
 
 HP Fan Monitor is an Omarchy bar widget that reads Linux hwmon temperature and
-fan capability data. Version 0.1.0 is monitoring-only.
+fan capability data. It also selects standard CPU power profiles through
+`powerprofilesctl` while leaving fan policy with the firmware.
 
 ## Runtime behavior
 
@@ -14,11 +15,15 @@ fan capability data. Version 0.1.0 is monitoring-only.
 - Makes no network requests.
 - Does not run as root.
 - Does not write sysfs, BIOS settings, or embedded-controller registers.
+- On an explicit click or keybinding, may request `power-saver`, `balanced`, or
+  `performance` from the existing `power-profiles-daemon` service.
+- Saves the selected logical profile in the user's XDG state directory.
 
 ## Permissions and dependencies
 
 - Python 3
 - Omarchy Shell / Quickshell
+- `powerprofilesctl` for CPU profile switching
 - Read access to standard Linux hwmon and thermal sysfs nodes
 
 No additional package or kernel module is installed by the plugin.

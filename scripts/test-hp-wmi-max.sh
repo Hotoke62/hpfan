@@ -31,7 +31,23 @@ if [[ "$initial_mode" != "2" ]]; then
   exit 1
 fi
 
-if [[ "${1:-}" == "--probe" ]]; then
+test_mode="single"
+case "${1:-}" in
+  --probe)
+    test_mode="probe"
+    ;;
+  --pulse)
+    test_mode="pulse"
+    ;;
+  "")
+    ;;
+  *)
+    printf 'Usage: %s [--probe|--pulse]\n' "$0" >&2
+    exit 2
+    ;;
+esac
+
+if [[ "$test_mode" == "probe" ]]; then
   printf 'Probe complete. No write was attempted.\n'
   exit 0
 fi
@@ -41,8 +57,25 @@ if [[ ! -t 0 ]]; then
   exit 1
 fi
 
-printf '\nThis test requests maximum fan for five seconds, then restores firmware Auto.\n'
+if [[ "$test_mode" == "pulse" ]]; then
+  printf '\nThis test alternates Maximum and Auto twice for an audible A/B comparison.\n'
+else
+  printf '\nThis test requests maximum fan for five seconds, then restores firmware Auto.\n'
+fi
 printf 'It uses the kernel hp-wmi interface and does not access raw EC registers.\n\n'
+
+cpu_max_millidegrees=0
+for input in /sys/class/hwmon/hwmon*/temp*_input; do
+  [[ -r "$input" ]] || continue
+  value="$(<"$input")"
+  [[ "$value" =~ ^[0-9]+$ ]] || continue
+  (( value > cpu_max_millidegrees && value <= 150000 )) && cpu_max_millidegrees="$value"
+done
+if [[ "$test_mode" == "pulse" && "$cpu_max_millidegrees" -gt 70000 ]]; then
+  printf 'ERROR: CPU is currently %.1f°C. Wait until it is below 70°C, then retry.\n' \
+    "$((cpu_max_millidegrees / 100))e-1" >&2
+  exit 1
+fi
 
 sudo -v
 
@@ -86,32 +119,58 @@ restore_auto() {
 trap restore_auto EXIT HUP INT TERM
 
 log_start="$(date --iso-8601=seconds)"
-printf 'Requesting maximum fan now. Listen for a clear fan-speed increase...\n'
-if ! write_mode 0; then
-  printf 'RESULT: hp-wmi rejected maximum-fan mode.\n' >&2
-  exit 1
-fi
+countdown() {
+  local label="$1" seconds="$2" remaining
+  for ((remaining = seconds; remaining >= 1; remaining--)); do
+    printf '%s: %ss remaining\r' "$label" "$remaining"
+    sleep 1
+  done
+  printf '\n'
+}
 
-printf 'Kernel accepted the request; reported mode is %s.\n' "$(<"$control_path")"
-for remaining in 5 4 3 2 1; do
-  printf 'Maximum request: %ss remaining\r' "$remaining"
-  sleep 1
-done
-printf '\n'
+request_maximum() {
+  auto_restored=false
+  printf 'Requesting maximum fan. Listen for a clear increase...\n'
+  if ! write_mode 0; then
+    printf 'RESULT: hp-wmi rejected maximum-fan mode.\n' >&2
+    exit 1
+  fi
+  printf 'Kernel accepted the request; reported mode is %s.\n' "$(<"$control_path")"
+}
 
-printf 'Restoring firmware automatic control...\n'
-if ! write_mode 2; then
-  printf 'CRITICAL: hp-wmi rejected the Auto restore command. Shut the laptop down fully.\n' >&2
-  exit 1
+request_auto() {
+  printf 'Requesting firmware Auto. Listen for a decrease...\n'
+  if ! write_mode 2; then
+    printf 'CRITICAL: hp-wmi rejected the Auto restore command. Shut the laptop down fully.\n' >&2
+    exit 1
+  fi
+  auto_restored=true
+  printf 'Auto request accepted; reported mode is %s.\n' "$(<"$control_path")"
+}
+
+if [[ "$test_mode" == "pulse" ]]; then
+  request_maximum
+  countdown "MAXIMUM pulse 1" 15
+  request_auto
+  countdown "AUTO interval" 15
+  request_maximum
+  countdown "MAXIMUM pulse 2" 15
+  request_auto
+else
+  request_maximum
+  countdown "Maximum request" 5
+  request_auto
 fi
-auto_restored=true
-printf 'Auto request accepted; reported mode is %s.\n' "$(<"$control_path")"
 
 printf '\nRelevant kernel messages from this test:\n'
 journalctl -b -k --since "$log_start" --no-pager 2>/dev/null |
   rg -i 'hp[-_ ]wmi|fan' || true
 
-printf '\nDid the fan audibly speed up during the five-second maximum request? [y/N] '
+if [[ "$test_mode" == "pulse" ]]; then
+  printf '\nDid the fan clearly follow both Maximum/Auto sound changes? [y/N] '
+else
+  printf '\nDid the fan audibly speed up during the five-second maximum request? [y/N] '
+fi
 read -r observed
 case "$observed" in
   y|Y|yes|YES|Yes)

@@ -16,11 +16,15 @@ BarWidget {
   property bool maxAutoCandidate: false
   property bool writeVerified: false
   property string verificationStatus: "untested"
+  property string logicalProfile: "unknown"
   property bool readingAvailable: false
   property bool refreshPending: false
 
   readonly property string helperPath: decodeURIComponent(
     String(Qt.resolvedUrl("plugin-status.py")).replace(/^file:\/\//, "")
+  )
+  readonly property string controlPath: decodeURIComponent(
+    String(Qt.resolvedUrl("hpfanctl.py")).replace(/^file:\/\//, "")
   )
   readonly property int refreshInterval: Math.max(
     500,
@@ -32,13 +36,21 @@ BarWidget {
   readonly property string rpmText: fanRpm >= 0
     ? Commons.I18n.formatNumber(fanRpm) + " RPM"
     : strings.t("bar.rpmUnavailable")
-  readonly property string profileText: {
+  readonly property string fanModeText: {
     if (controlMode === "automatic") return strings.t("profile.auto")
     if (controlMode === "maximum") return strings.t("profile.turbo")
     if (controlMode === "manual") return strings.t("profile.custom")
     return strings.t("profile.unknown")
   }
-  readonly property string statusText: temperatureText + " · " + rpmText
+  readonly property string cpuProfileText: {
+    if (logicalProfile === "auto") return strings.t("profile.auto")
+    if (logicalProfile === "quiet") return strings.t("profile.quiet")
+    if (logicalProfile === "balanced") return strings.t("profile.balanced")
+    if (logicalProfile === "performance") return strings.t("profile.performance")
+    if (logicalProfile === "turbo") return strings.t("profile.turboCpu")
+    return strings.t("profile.unknown")
+  }
+  readonly property string statusText: temperatureText + " · " + rpmText + " · " + cpuProfileText
   readonly property string controlText: {
     if (manualDutyAvailable) return strings.t("control.manualAvailable")
     if (maxAutoCandidate && verificationStatus === "failed")
@@ -49,7 +61,8 @@ BarWidget {
   readonly property string tooltip: strings.t("bar.tooltip")
     .arg(temperatureText)
     .arg(rpmText)
-    .arg(profileText)
+    .arg(cpuProfileText)
+    .arg(fanModeText)
     .arg(controlText)
 
   Commons.Translations {
@@ -98,6 +111,15 @@ BarWidget {
         if (candidateStatus === "untested" || candidateStatus === "passed" || candidateStatus === "failed")
           verificationStatus = candidateStatus
       }
+
+      logicalProfile = "unknown"
+      if (data.profile && typeof data.profile === "object") {
+        var candidateProfile = String(data.profile.logical || "")
+        if (candidateProfile === "auto" || candidateProfile === "quiet"
+            || candidateProfile === "balanced" || candidateProfile === "performance"
+            || candidateProfile === "turbo")
+          logicalProfile = candidateProfile
+      }
     } catch (error) {
       // Keep the last valid reading. No command output is displayed verbatim.
     }
@@ -111,12 +133,21 @@ BarWidget {
     statusProc.running = true
   }
 
+  function runProfileAction(action) {
+    if (profileProc.running) return
+    if (action !== "cycle" && action !== "toggle-turbo") return
+    profileProc.command = ["python3", root.controlPath, "--json", "--notify", action]
+    profileProc.running = true
+  }
+
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   ShellIpc {
     target: "vee.hpfan"
     function refresh(): void { root.refresh() }
+    function cycle(): void { root.runProfileAction("cycle") }
+    function toggleTurbo(): void { root.runProfileAction("toggle-turbo") }
   }
 
   Process {
@@ -139,10 +170,30 @@ BarWidget {
     }
   }
 
+  Process {
+    id: profileProc
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+    onRunningChanged: {
+      if (running) {
+        profileWatchdog.restart()
+        return
+      }
+      profileWatchdog.stop()
+      root.refresh()
+    }
+  }
+
   Timer {
     id: processWatchdog
     interval: 3000
     onTriggered: if (statusProc.running) statusProc.running = false
+  }
+
+  Timer {
+    id: profileWatchdog
+    interval: 6000
+    onTriggered: if (profileProc.running) profileProc.running = false
   }
 
   Timer {
@@ -162,6 +213,10 @@ BarWidget {
     horizontalMargin: 8.75
     verticalPadding: 8.75
     tooltipText: root.tooltip
-    onPressed: root.refresh()
+    onPressed: function(b) {
+      if (b === Qt.LeftButton) root.runProfileAction("cycle")
+      else if (b === Qt.RightButton) root.runProfileAction("toggle-turbo")
+      else root.refresh()
+    }
   }
 }

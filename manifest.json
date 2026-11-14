@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "vee.hpfan",
   "name": "HP Fan Monitor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Vatsal Visani",
   "license": "MIT",
-  "description": "Safe temperature and fan-capability monitoring for HP laptops",
+  "description": "Safe temperature monitoring and CPU power profiles for HP laptops",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "HP Fan Monitor",
-    "description": "Shows CPU temperature, fan RPM availability, and the reported HP fan mode.",
+    "description": "Shows temperatures and fan capability, cycles CPU profiles, and keeps fan control with firmware.",
     "category": "System",
     "aliases": [
       "fan",

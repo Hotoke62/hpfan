@@ -4,8 +4,8 @@ A safety-first Omarchy bar plugin and Linux sensor reader developed on an HP
 EliteBook 840 G4. It reports CPU temperature, fan RPM when the firmware exposes
 it, and the current kernel-reported fan mode.
 
-Version 0.1.0 is deliberately monitoring-only. It does not write embedded
-controller registers and does not claim that unsupported controls work.
+Version 0.2.0 adds unprivileged CPU power profiles. It does not write embedded
+controller registers and does not claim that unsupported fan controls work.
 
 ## Current EliteBook 840 G4 support
 
@@ -22,6 +22,8 @@ Available:
 - ACPI and other hwmon temperature discovery
 - HP WMI reported automatic/maximum mode
 - Omarchy bar display and JSON output
+- Auto, Quiet, Balanced, Performance, and CPU-only Turbo profiles through
+  `power-profiles-daemon`
 
 Not exposed by this firmware/kernel combination:
 
@@ -58,19 +60,58 @@ cp -a . ~/.config/omarchy/plugins/vee.hpfan
 omarchy plugin enable vee.hpfan --before omarchy.power
 ```
 
-The widget updates every two seconds by default. Click it to refresh. Profile
-cycling will be enabled only after a writable backend passes its safety test.
+The widget updates every two seconds by default:
+
+- Left click cycles Auto, Quiet, Balanced, Performance, and Turbo.
+- Right click toggles CPU Turbo and restores the previous profile.
+- Middle click refreshes the sensor reading.
+
+These are CPU power profiles. The fan always remains under firmware automatic
+control on the tested EliteBook.
+
+## CPU profile client
+
+```bash
+python3 hpfanctl.py status
+python3 hpfanctl.py set quiet
+python3 hpfanctl.py set balanced
+python3 hpfanctl.py set performance
+python3 hpfanctl.py toggle-turbo
+python3 hpfanctl.py cycle
+```
+
+On Intel P-state systems, Turbo means the performance power profile while
+Intel Turbo Boost remains allowed. It does not force a fixed clock and it does
+not force the fan to maximum speed.
+
+| Logical profile | OS power profile | Fan policy |
+|---|---|---|
+| Auto | balanced | Firmware Auto |
+| Quiet | power-saver | Firmware Auto |
+| Balanced | balanced | Firmware Auto |
+| Performance | performance | Firmware Auto |
+| Turbo | performance, temporary logical override | Firmware Auto |
+
+The logical profile is saved under `~/.local/state/hpfan/profile.json`. The
+existing power-profiles daemon persists the corresponding OS power profile.
+
+Optional Hyprland binding:
+
+```lua
+o.bind("SUPER + SHIFT + U", "Toggle CPU Turbo profile", "python3 ~/.config/omarchy/plugins/vee.hpfan/hpfanctl.py --notify toggle-turbo")
+```
 
 ## Roadmap
 
 1. Read-only sensor plugin — complete.
 2. HP WMI maximum/Auto physical test — failed on the test machine.
-3. Investigate only documented or model-verified control backends.
-4. Add the hardened service and client only if a safe writable backend exists.
-5. Add Auto, Quiet, Balanced, Performance, Custom, and temporary Turbo modes
+3. CPU power-profile client — complete.
+4. Investigate only documented or model-verified fan-control backends.
+5. Add a hardened privileged service only if a safe writable fan backend exists.
+6. Add fan-specific Auto, Quiet, Balanced, Performance, Custom, and Turbo modes
    only where the backend can actually implement them.
-6. Add an 85°C maximum-fan safety override and firmware-Auto failsafe.
-7. Add Hyprland bindings and boot restoration.
+7. Add an 85°C maximum-fan safety override and firmware-Auto failsafe.
+8. Add boot restoration for any future fan-specific profile.
 
 ## Stage 1: read-only sensor probe
 
@@ -116,6 +157,22 @@ Then run the interactive test in a terminal:
 
 ```bash
 ./scripts/test-hp-wmi-max.sh
+```
+
+For a final, longer audible comparison:
+
+```bash
+./scripts/test-hp-wmi-max.sh --pulse
+```
+
+Pulse mode alternates Maximum and Auto twice. It refuses to start above 70°C,
+because an already-hot firmware-controlled fan makes the comparison unreliable.
+
+The convenience wrapper temporarily selects Quiet, waits for a cooler baseline,
+runs pulse mode, and restores the previous CPU profile:
+
+```bash
+./scripts/run-hp-wmi-pulse.sh
 ```
 
 The script requests maximum fan for five seconds. An exit trap attempts to

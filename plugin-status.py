@@ -13,6 +13,7 @@ sys.path.insert(0, str(PLUGIN_ROOT / "src"))
 
 from hpfan.sensors import SysfsReader  # noqa: E402
 from hpfan.state import hp_wmi_max_status  # noqa: E402
+from hpfan.profiles import PowerProfileController, ProfileError  # noqa: E402
 
 
 def main() -> int:
@@ -22,6 +23,10 @@ def main() -> int:
         if control.get("hwmon_name") == "hp" and control.get("max_auto_candidate") is True:
             control["verification_status"] = verification_status
             control["write_verified"] = verification_status == "passed"
+    try:
+        snapshot["profile"] = PowerProfileController().status().to_dict()
+    except ProfileError as error:
+        snapshot["profile"] = {"logical": "unknown", "error": str(error)[:256]}
     output = json.dumps(snapshot, separators=(",", ":"), sort_keys=True)
     if len(output) > 65536:
         print('{"error":"snapshot too large"}')
