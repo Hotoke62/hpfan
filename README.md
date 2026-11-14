@@ -31,9 +31,9 @@ Not exposed by this firmware/kernel combination:
 - A safe custom temperature-to-fan-speed curve
 
 The Linux `hp_wmi` driver exposes a possible maximum/Auto switch, but this
-machine logged an invalid-parameter response during driver initialization. The
-write path must therefore pass the included physical test before Turbo control
-is enabled.
+machine logged an invalid-parameter response during driver initialization. A
+guarded physical test on 2026-11-14 produced no audible fan-speed increase.
+Maximum-fan control is therefore treated as unsupported on this machine.
 
 ## Safety policy
 
@@ -64,11 +64,13 @@ cycling will be enabled only after a writable backend passes its safety test.
 ## Roadmap
 
 1. Read-only sensor plugin — complete.
-2. Verify HP WMI maximum/Auto switching on physical hardware.
-3. Add the hardened root service and unprivileged `hpfanctl` client.
-4. Add Auto, Quiet, Balanced, Performance, Custom, and temporary Turbo modes.
-5. Add an 85°C maximum-fan safety override and firmware-Auto failsafe.
-6. Add Hyprland bindings and boot restoration.
+2. HP WMI maximum/Auto physical test — failed on the test machine.
+3. Investigate only documented or model-verified control backends.
+4. Add the hardened service and client only if a safe writable backend exists.
+5. Add Auto, Quiet, Balanced, Performance, Custom, and temporary Turbo modes
+   only where the backend can actually implement them.
+6. Add an 85°C maximum-fan safety override and firmware-Auto failsafe.
+7. Add Hyprland bindings and boot restoration.
 
 ## Stage 1: read-only sensor probe
 
@@ -118,7 +120,10 @@ Then run the interactive test in a terminal:
 
 The script requests maximum fan for five seconds. An exit trap attempts to
 restore firmware automatic control if the test succeeds, fails, or is
-interrupted. It never loads a module or reads or writes raw EC registers.
+interrupted. The final physical observation is stored under
+`$XDG_STATE_HOME/hpfan/capabilities.json` (normally
+`~/.local/state/hpfan/capabilities.json`). It never loads a module or reads or
+writes raw EC registers.
 
 ## Development checks
 

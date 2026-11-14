@@ -15,6 +15,7 @@ BarWidget {
   property bool manualDutyAvailable: false
   property bool maxAutoCandidate: false
   property bool writeVerified: false
+  property string verificationStatus: "untested"
   property bool readingAvailable: false
   property bool refreshPending: false
 
@@ -40,6 +41,8 @@ BarWidget {
   readonly property string statusText: temperatureText + " · " + rpmText
   readonly property string controlText: {
     if (manualDutyAvailable) return strings.t("control.manualAvailable")
+    if (maxAutoCandidate && verificationStatus === "failed")
+      return strings.t("control.failedVerification")
     if (maxAutoCandidate && !writeVerified) return strings.t("control.awaitingVerification")
     return strings.t("control.monitorOnly")
   }
@@ -82,6 +85,7 @@ BarWidget {
       manualDutyAvailable = false
       maxAutoCandidate = false
       writeVerified = false
+      verificationStatus = "untested"
       if (Array.isArray(data.controls) && data.controls.length > 0) {
         var control = data.controls[0] || {}
         var candidateMode = String(control.reported_mode || "")
@@ -90,6 +94,9 @@ BarWidget {
         manualDutyAvailable = control.manual_duty_available === true
         maxAutoCandidate = control.max_auto_candidate === true
         writeVerified = control.write_verified === true
+        var candidateStatus = String(control.verification_status || "")
+        if (candidateStatus === "untested" || candidateStatus === "passed" || candidateStatus === "failed")
+          verificationStatus = candidateStatus
       }
     } catch (error) {
       // Keep the last valid reading. No command output is displayed verbatim.

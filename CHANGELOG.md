@@ -6,3 +6,4 @@
 - Add an Omarchy bar widget with bounded JSON parsing.
 - Add a guarded HP WMI maximum/Auto capability test.
 - Document the EliteBook 840 G4 hardware limitations and EC safety policy.
+- Record machine-local HP WMI verification as passed, failed, or untested.

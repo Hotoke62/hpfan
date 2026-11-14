@@ -51,6 +51,21 @@ write_mode() {
   printf '%s\n' "$mode" | sudo tee "$control_path" >/dev/null
 }
 
+record_verification() {
+  local status="$1"
+  local state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+  local state_dir="$state_home/hpfan"
+  local temporary
+
+  [[ "$status" == "passed" || "$status" == "failed" ]] || return 1
+  umask 077
+  mkdir -p "$state_dir"
+  temporary="$(mktemp "$state_dir/.capabilities.XXXXXX")"
+  printf '{\n  "hp_wmi_max": "%s",\n  "observed_at": "%s"\n}\n' \
+    "$status" "$(date --iso-8601=date)" > "$temporary"
+  mv "$temporary" "$state_dir/capabilities.json"
+}
+
 auto_restored=false
 restore_auto() {
   local previous_status=$?
@@ -100,9 +115,11 @@ printf '\nDid the fan audibly speed up during the five-second maximum request? [
 read -r observed
 case "$observed" in
   y|Y|yes|YES|Yes)
+    record_verification passed
     printf 'RESULT: maximum/Auto control is physically observed as working.\n'
     ;;
   *)
+    record_verification failed
     printf 'RESULT: maximum-fan operation was not physically verified.\n'
     ;;
 esac
