@@ -4,8 +4,8 @@ A safety-first Omarchy bar plugin and Linux sensor reader developed on an HP
 EliteBook 840 G4. It reports CPU temperature, fan RPM when the firmware exposes
 it, and the current kernel-reported fan mode.
 
-Version 0.3.0 adds an interactive Omarchy popup and unprivileged CPU power profiles. It does not write embedded
-controller registers and does not claim that unsupported fan controls work.
+Version 0.4.0 adds a verified, model-gated ACPI fan service, live RPM,
+Firmware Auto, Full Speed, and Compact/Detailed bar appearances.
 
 ## Current EliteBook 840 G4 support
 
@@ -24,19 +24,22 @@ Available:
 - Omarchy bar display and JSON output
 - Auto, Quiet, Balanced, Performance, and CPU-only Turbo profiles through
   `power-profiles-daemon`
+- Firmware Auto and Full Speed through the G4 BIOS's `STMM` method
+- Live fan RPM through the BIOS `GFRM` method
+- Independent full-speed safety override at 85°C, released at 80°C
 
-Not exposed by this firmware/kernel combination:
+Not currently enabled:
 
-- Fan RPM (`fan1_input` is absent)
 - Separate Intel GPU temperature
 - Manual PWM duty (`pwm1` is absent)
-- A safe custom temperature-to-fan-speed curve
+- Custom curves, until intermediate STMM percentages are physically verified
 
 The Linux `hp_wmi` driver exposes a possible maximum/Auto switch, but this
 machine logged an invalid-parameter response during driver initialization. A
 final guarded test on 2026-11-14 confirmed that the BIOS rejects both WMI fan
-commands with `EINVAL`. Maximum-fan control is therefore unsupported through
-the safe kernel interface on this machine.
+commands with `EINVAL`. The machine's own DSDT was then inspected and its
+`STMM`, `GFRM`, `FTGC`, and `FRDC` paths were tested. Full Speed reached above
+5000 RPM and the BIOS reset method restored firmware control.
 
 ## Safety policy
 
@@ -46,10 +49,10 @@ the safe kernel interface on this machine.
 - Keep persistent BIOS fan settings untouched so Windows remains unaffected.
 - Refuse unsupported profiles instead of silently pretending they work.
 
-Raw `ec_sys` access can disable cooling, alter charging behavior, hang the
-embedded controller, or leave state active across a warm reboot. This project
-will only add an EC backend after an exact model-specific register map has been
-independently verified.
+The privileged service is hard-gated to HP EliteBook 840 G4 board 828C. It uses
+the BIOS's ACPI methods for control, keeps `ec_sys` read-only for telemetry, and
+calls the BIOS reset method on Auto and service shutdown. The installer and the
+daemon independently verify all three DMI identifiers before enabling control.
 
 ## Omarchy installation
 
@@ -68,11 +71,42 @@ The widget updates every two seconds by default:
 - Middle click cycles Auto, Quiet, Balanced, Performance, and Turbo.
 
 The panel contains clickable CPU profile buttons and a dedicated fan-control
-section. Full Speed and Custom Curve are shown but disabled because the BIOS
-rejects the safe WMI control path.
+section. Firmware Auto and Full Speed are active when `hpfand` is running.
+Custom Curve remains visible but disabled pending physical verification.
 
-These are CPU power profiles. The fan always remains under firmware automatic
-control on the tested EliteBook.
+Under the bar widget's Appearance settings, choose:
+
+- Compact: temperature and abbreviated RPM.
+- Detailed: temperature, full RPM, and CPU profile.
+
+CPU profiles and fan mode are independent. CPU Turbo does not automatically
+force Full Speed; select Full Speed separately when wanted.
+
+The appearance selector is available from the bar editor: open the bar's
+Appearance settings, select **HP Fan Monitor**, then choose **Compact** or
+**Detailed** under **Bar appearance**. The setting is stored in
+`~/.config/omarchy/shell.json` and survives reboot.
+
+## Verified fan-service installation
+
+The bar plugin itself installs no packages or kernel modules. Full Speed needs
+the separate `hpfand` service and an `acpi_call.ko` built for the running
+kernel. The installer refuses every machine except the verified HP EliteBook
+840 G4 board 828C and refuses a module whose vermagic does not match `uname -r`:
+
+```bash
+sudo ./scripts/install-verified-service.sh /path/to/acpi_call.ko
+```
+
+After a kernel update, rebuild `acpi_call.ko` for the new kernel and rerun the
+installer. To remove the service and immediately request firmware Auto:
+
+```bash
+sudo ./scripts/remove-verified-service.sh
+```
+
+The service does not change BIOS setup, firmware, or Windows. Fan mode is a
+runtime ACPI request and is reset to firmware Auto when the service stops.
 
 ## CPU profile client
 
@@ -97,6 +131,18 @@ not force the fan to maximum speed.
 | Performance | performance | Firmware Auto |
 | Turbo | performance, temporary logical override | Firmware Auto |
 
+## Fan service client
+
+```bash
+python3 hpfanctl.py fan status
+python3 hpfanctl.py fan set full
+python3 hpfanctl.py fan set auto
+```
+
+The service stores the requested fan mode under `/var/lib/hpfan/state.json`.
+At 85°C it forces Full Speed regardless of the requested mode, then returns to
+that mode after temperature falls to 80°C.
+
 The logical profile is saved under `~/.local/state/hpfan/profile.json`. The
 existing power-profiles daemon persists the corresponding OS power profile.
 
@@ -111,12 +157,11 @@ o.bind("SUPER + SHIFT + U", "Toggle CPU Turbo profile", "python3 ~/.config/omarc
 1. Read-only sensor plugin — complete.
 2. HP WMI maximum/Auto physical test — failed on the test machine.
 3. CPU power-profile client — complete.
-4. Investigate only documented or model-verified fan-control backends.
-5. Add a hardened privileged service only if a safe writable fan backend exists.
-6. Add fan-specific Auto, Quiet, Balanced, Performance, Custom, and Turbo modes
-   only where the backend can actually implement them.
-7. Add an 85°C maximum-fan safety override and firmware-Auto failsafe.
-8. Add boot restoration for any future fan-specific profile.
+4. Verified model-specific ACPI backend — complete.
+5. Hardened privileged service — complete.
+6. Firmware Auto and Full Speed — complete.
+7. 85°C maximum-fan safety override and firmware-Auto failsafe — complete.
+8. Physically verify intermediate percentages before enabling Custom Curve.
 
 ## Stage 1: read-only sensor probe
 
@@ -147,8 +192,9 @@ Run the tests:
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-On this laptop, CPU temperature is available but fan RPM, a separate Intel GPU
-temperature, and manual PWM duty are not currently exposed by the kernel.
+On this laptop, CPU temperature is available through the kernel. The verified
+service obtains fan RPM through the BIOS `GFRM` method; a separate Intel GPU
+temperature and manual PWM duty are not exposed.
 
 ## Guarded hp-wmi maximum/Auto test
 

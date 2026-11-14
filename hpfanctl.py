@@ -14,6 +14,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PLUGIN_ROOT / "src"))
 
 from hpfan.profiles import LOGICAL_PROFILES, PowerProfileController, ProfileError  # noqa: E402
+from hpfan.acpi_fan import FanBackendError, FanServiceClient, VALID_MODES  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +27,11 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("profile", choices=LOGICAL_PROFILES)
     commands.add_parser("cycle", help="cycle Auto, Quiet, Balanced, Performance, and Turbo")
     commands.add_parser("toggle-turbo", help="toggle CPU Turbo and restore the previous profile")
+    fan_parser = commands.add_parser("fan", help="control the verified privileged fan backend")
+    fan_commands = fan_parser.add_subparsers(dest="fan_command", required=True)
+    fan_commands.add_parser("status", help="show fan-service status")
+    fan_set = fan_commands.add_parser("set", help="select firmware Auto or Full Speed")
+    fan_set.add_argument("mode", choices=VALID_MODES)
     return parser
 
 
@@ -57,10 +63,57 @@ def _format_text(status: dict[str, object]) -> str:
     )
 
 
+def _format_fan_text(status: dict[str, object]) -> str:
+    rpm = status.get("rpm")
+    rpm_text = f"{rpm} RPM" if isinstance(rpm, int) else "unavailable"
+    safety = "yes" if status.get("safety_forced") is True else "no"
+    return "\n".join(
+        (
+            f"Fan mode: {status.get('effective_mode', 'unknown')}",
+            f"Requested: {status.get('requested_mode', 'unknown')}",
+            f"Fan speed: {rpm_text}",
+            f"Safety override: {safety}",
+        )
+    )
+
+
+def _notify_fan(status: dict[str, object]) -> None:
+    rpm = status.get("rpm")
+    rpm_text = f"{rpm} RPM" if isinstance(rpm, int) else "RPM unavailable"
+    mode = str(status.get("effective_mode", "unknown")).title()
+    message = f"Fan mode: {mode}\n{rpm_text}"
+    if status.get("safety_forced") is True:
+        message += "\n85°C safety override active"
+    try:
+        subprocess.run(["notify-send", "HP Fan", message], check=False, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     controller = PowerProfileController()
     command = args.command or "status"
+    if command == "fan":
+        try:
+            client = FanServiceClient()
+            if args.fan_command == "status":
+                value = client.status()
+            else:
+                value = client.set_mode(args.mode)
+        except FanBackendError as error:
+            if args.json:
+                print(json.dumps({"error": str(error)}, separators=(",", ":")))
+            else:
+                print(f"hpfanctl: {error}", file=sys.stderr)
+            return 1
+        if args.notify:
+            _notify_fan(value)
+        if args.json:
+            print(json.dumps(value, separators=(",", ":"), sort_keys=True))
+        else:
+            print(_format_fan_text(value))
+        return 0
     try:
         if command == "status":
             status = controller.status()

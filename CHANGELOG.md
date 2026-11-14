@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 - 2026-11-14
+
+- Verify the EliteBook 840 G4 fan map from its own DSDT.
+- Add a root-only ACPI STMM service with Firmware Auto and Full Speed modes.
+- Add live fan RPM reporting from the BIOS and an 85°C full-speed safety floor.
+- Restore firmware control through the BIOS reset method on Auto, shutdown, or service stop.
+- Enable the popup's Firmware Auto and Full Speed buttons when the service is available.
+- Add Compact and Detailed bar appearance settings.
+- Keep Custom Curve disabled until intermediate fan targets are physically verified.
+
 ## 0.3.0 - 2026-11-14
 
 - Add a native clickable Omarchy popup panel.

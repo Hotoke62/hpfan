@@ -1,0 +1,25 @@
+[Unit]
+Description=HP EliteBook 840 G4 verified fan controller
+After=local-fs.target
+Conflicts=nbfc_service.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/modprobe ec_sys
+ExecStartPre=/usr/bin/modprobe acpi_call
+ExecStart=/usr/local/lib/hpfan/hpfand.py
+ExecStopPost=/usr/local/lib/hpfan/hpfan-reset
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=hpfan
+RuntimeDirectoryMode=0750
+StateDirectory=hpfan
+StateDirectoryMode=0750
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=-/proc/acpi/call /run/hpfan /var/lib/hpfan
+
+[Install]
+WantedBy=multi-user.target

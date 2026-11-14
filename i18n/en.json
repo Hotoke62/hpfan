@@ -17,6 +17,8 @@
   "boost.allowed": "Allowed",
   "boost.disabled": "Disabled",
   "fan.firmwareAuto": "Firmware Auto",
+  "fan.fullSpeed": "Full Speed",
+  "fan.fullSafety": "Full Speed (85°C safety)",
   "panel.title": "HP Thermal Control",
   "panel.subtitle": "SAFE CPU PROFILES · FIRMWARE FAN",
   "panel.cpuProfile": "CPU profile",
@@ -26,8 +28,9 @@
   "panel.cpuProfiles": "CPU profiles",
   "panel.cpuProfilesHelp": "These buttons change CPU power policy only. Intel still controls clock boost and thermal limits.",
   "panel.fanControl": "Fan control",
-  "panel.firmwareAutoActive": "Firmware Auto — active",
-  "panel.fullSpeed": "Full Speed — unavailable",
+  "panel.firmwareAutoActive": "Firmware Auto",
+  "panel.fullSpeed": "Full Speed",
   "panel.customCurve": "Custom Curve — unavailable",
-  "panel.fanUnavailableReason": "This EliteBook BIOS rejects the safe hp_wmi fan commands with EINVAL. Full speed and custom curves stay disabled to avoid undocumented EC writes."
+  "panel.fanBackendUnavailable": "The verified ACPI fan service is not running. Firmware Auto remains in control.",
+  "panel.fanVerifiedReason": "Full Speed uses this G4 BIOS's verified STMM method. Firmware Auto calls the BIOS reset method. The 85°C safety override always wins. Custom curves remain locked until intermediate speeds are physically verified."
 }

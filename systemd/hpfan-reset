@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -u
+
+if [[ -w /proc/acpi/call ]]; then
+  printf '%s\n' '\_SB.WMIV.STMM bAA' > /proc/acpi/call
+  cat /proc/acpi/call >/dev/null 2>&1 || true
+fi

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "vee.hpfan",
   "name": "HP Fan Monitor",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Vatsal Visani",
   "license": "MIT",
-  "description": "Safe temperature monitoring and CPU power profiles for HP laptops",
+  "description": "Temperature, CPU profiles, and verified fan control for the HP EliteBook 840 G4",
   "kinds": [
     "bar-widget"
   ],
@@ -25,9 +25,21 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "refreshIntervalMs": 2000
+      "refreshIntervalMs": 2000,
+      "displayMode": "Detailed"
     },
     "schema": [
+      {
+        "key": "displayMode",
+        "type": "enum",
+        "label": "Bar appearance",
+        "options": [
+          "Compact",
+          "Detailed"
+        ],
+        "defaultValue": "Detailed",
+        "description": "Compact shows temperature and abbreviated RPM; Detailed also shows full RPM and the CPU profile."
+      },
       {
         "key": "refreshIntervalMs",
         "type": "integer",
