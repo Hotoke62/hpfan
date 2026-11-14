@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "vee.hpfan",
+  "name": "HP Fan Monitor",
+  "version": "0.1.0",
+  "author": "Vatsal Visani",
+  "license": "MIT",
+  "description": "Safe temperature and fan-capability monitoring for HP laptops",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "HP Fan Monitor",
+    "description": "Shows CPU temperature, fan RPM availability, and the reported HP fan mode.",
+    "category": "System",
+    "aliases": [
+      "fan",
+      "temperature",
+      "thermal",
+      "hp"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalMs": 2000
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalMs",
+        "type": "integer",
+        "label": "Refresh interval",
+        "min": 500,
+        "max": 10000,
+        "step": 500,
+        "defaultValue": 2000,
+        "description": "Milliseconds between read-only sensor updates."
+      }
+    ]
+  }
+}

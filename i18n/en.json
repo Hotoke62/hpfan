@@ -1,0 +1,12 @@
+{
+  "bar.unavailable": "Unavailable",
+  "bar.rpmUnavailable": "RPM unavailable",
+  "bar.tooltip": "CPU: %1\nFan: %2\nReported mode: %3\n%4\nClick to refresh",
+  "profile.auto": "Auto",
+  "profile.turbo": "Turbo",
+  "profile.custom": "Custom",
+  "profile.unknown": "Unknown",
+  "control.manualAvailable": "Manual fan duty is exposed by the kernel.",
+  "control.awaitingVerification": "Maximum/Auto control awaits a physical safety test.",
+  "control.monitorOnly": "Monitoring only; no safe writable fan backend is available."
+}
