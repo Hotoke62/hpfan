@@ -34,8 +34,9 @@ Not exposed by this firmware/kernel combination:
 
 The Linux `hp_wmi` driver exposes a possible maximum/Auto switch, but this
 machine logged an invalid-parameter response during driver initialization. A
-guarded physical test on 2026-11-14 produced no audible fan-speed increase.
-Maximum-fan control is therefore treated as unsupported on this machine.
+final guarded test on 2026-11-14 confirmed that the BIOS rejects both WMI fan
+commands with `EINVAL`. Maximum-fan control is therefore unsupported through
+the safe kernel interface on this machine.
 
 ## Safety policy
 

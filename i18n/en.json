@@ -12,6 +12,6 @@
   "profile.unknown": "Unknown",
   "control.manualAvailable": "Manual fan duty is exposed by the kernel.",
   "control.awaitingVerification": "Maximum/Auto control awaits a physical safety test.",
-  "control.failedVerification": "Maximum-fan control failed physical verification; firmware Auto remains active.",
+  "control.failedVerification": "The kernel/BIOS rejected maximum-fan control; firmware Auto remains active.",
   "control.monitorOnly": "Monitoring only; no safe writable fan backend is available."
 }

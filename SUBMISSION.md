@@ -37,8 +37,8 @@ shows these values as unavailable rather than estimating them.
 The repository contains a separate interactive HP WMI maximum/Auto test. That
 test requires sudo and is never launched by the plugin.
 
-On the original EliteBook 840 G4 test machine, the maximum-fan request produced
-no audible speed increase. The machine is recorded locally as failed
+On the original EliteBook 840 G4 test machine, the kernel/BIOS rejected the
+maximum-fan request with `EINVAL`. The machine is recorded locally as failed
 verification and remains under firmware automatic control.
 
 ## Safety review

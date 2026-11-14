@@ -7,6 +7,8 @@
 - Remember the prior logical profile when Turbo is toggled.
 - Keep fan policy explicitly under firmware automatic control.
 - Add a longer two-pulse HP WMI maximum/Auto verification test.
+- Treat `EINVAL` as a definitive unsupported WMI fan backend and distinguish it
+  from a failed restore after a successfully accepted override.
 
 ## 0.1.0 - 2026-11-14
 

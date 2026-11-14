@@ -100,6 +100,7 @@ record_verification() {
 }
 
 auto_restored=false
+maximum_request_accepted=false
 restore_auto() {
   local previous_status=$?
 
@@ -107,9 +108,14 @@ restore_auto() {
     printf '\nRestoring firmware automatic control...\n' >&2
     if write_mode 2; then
       auto_restored=true
+      maximum_request_accepted=false
       printf 'Restore command completed; reported mode is %s.\n' "$(<"$control_path")" >&2
+    elif [[ "$maximum_request_accepted" == true ]]; then
+      printf 'CRITICAL: Auto was rejected after Maximum had been accepted. Shut down fully if the fan remains forced.\n' >&2
     else
-      printf 'CRITICAL: the Auto restore command failed. Shut the laptop down fully.\n' >&2
+      printf 'Auto was also rejected, but Maximum was never accepted; reported mode is %s.\n' \
+        "$(<"$control_path")" >&2
+      printf 'No fan override was established. Shut down only if the fan is visibly or audibly stuck.\n' >&2
     fi
   fi
 
@@ -132,19 +138,26 @@ request_maximum() {
   auto_restored=false
   printf 'Requesting maximum fan. Listen for a clear increase...\n'
   if ! write_mode 0; then
+    record_verification failed
     printf 'RESULT: hp-wmi rejected maximum-fan mode.\n' >&2
     exit 1
   fi
+  maximum_request_accepted=true
   printf 'Kernel accepted the request; reported mode is %s.\n' "$(<"$control_path")"
 }
 
 request_auto() {
   printf 'Requesting firmware Auto. Listen for a decrease...\n'
   if ! write_mode 2; then
-    printf 'CRITICAL: hp-wmi rejected the Auto restore command. Shut the laptop down fully.\n' >&2
+    if [[ "$maximum_request_accepted" == true ]]; then
+      printf 'CRITICAL: hp-wmi rejected Auto after accepting Maximum. Shut down fully if the fan remains forced.\n' >&2
+    else
+      printf 'Auto was rejected, but no Maximum override was accepted.\n' >&2
+    fi
     exit 1
   fi
   auto_restored=true
+  maximum_request_accepted=false
   printf 'Auto request accepted; reported mode is %s.\n' "$(<"$control_path")"
 }
 
